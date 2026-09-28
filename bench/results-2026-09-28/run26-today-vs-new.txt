@@ -1,0 +1,79 @@
+# 2026-09-28T01:43:44Z model=ggml-small.en.bin runs=1 casting=off out=(temp)
+   3.0s  A  median 3.37s  min 3.37  max 3.37  
+   3.0s  E  median 0.96s  min 0.96  max 0.96  =A
+   3.0s  F  median 0.87s  min 0.87  max 0.87  =A =E
+   5.9s  A  median 4.09s  min 4.09  max 4.09  
+   5.9s  E  median 1.36s  min 1.36  max 1.36  ≠A
+   5.9s  F  median 1.23s  min 1.23  max 1.23  ≠A =E
+   9.9s  A  median 3.79s  min 3.79  max 3.79  
+   9.9s  E  median 1.53s  min 1.53  max 1.53  =A
+   9.9s  F  median 1.40s  min 1.40  max 1.40  =A =E
+  15.0s  A  median 4.50s  min 4.50  max 4.50  
+  15.0s  E  median 2.44s  min 2.44  max 2.44  =A
+  15.0s  F  median 1.95s  min 1.95  max 1.95  =A =E
+  24.7s  A  median 5.42s  min 5.42  max 5.42  
+  24.7s  E  median 3.84s  min 3.84  max 3.84  ≠A
+  24.7s  F  median 3.02s  min 3.02  max 3.02  ≠A =E
+  45.8s  A  median 8.82s  min 8.82  max 8.82  
+  45.8s  E  median 7.13s  min 7.13  max 7.13  ≠A
+  45.8s  F  median 5.33s  min 5.33  max 5.33  ≠A =E
+   0.4s  A  median 2.98s  min 2.98  max 2.98  
+   0.4s  E  median 0.80s  min 0.80  max 0.80  =A
+   0.4s  F  median 0.75s  min 0.75  max 0.75  =A =E
+   2.4s  A  median 3.15s  min 3.15  max 3.15  
+   2.4s  E  median 0.85s  min 0.85  max 0.85  ≠A
+   2.4s  F  median 0.79s  min 0.79  max 0.79  ≠A =E
+   2.6s  A  median 3.17s  min 3.17  max 3.17  
+   2.6s  E  median 0.90s  min 0.90  max 0.90  ≠A
+   2.6s  F  median 0.84s  min 0.84  max 0.84  ≠A =E
+   3.8s  A  median 3.63s  min 3.63  max 3.63  
+   3.8s  E  median 1.36s  min 1.36  max 1.36  ≠A
+   3.8s  F  median 1.30s  min 1.30  max 1.30  ≠A =E
+   4.2s  A  median 3.28s  min 3.28  max 3.28  
+   4.2s  E  median 1.20s  min 1.20  max 1.20  ≠A
+   4.2s  F  median 1.13s  min 1.13  max 1.13  ≠A =E
+   4.4s  A  median 3.40s  min 3.40  max 3.40  
+   4.4s  E  median 1.05s  min 1.05  max 1.05  =A
+   4.4s  F  median 0.99s  min 0.99  max 0.99  =A =E
+   5.8s  A  median 3.28s  min 3.28  max 3.28  
+   5.8s  E  median 1.08s  min 1.08  max 1.08  ≠A
+   5.8s  F  median 1.00s  min 1.00  max 1.00  ≠A =E
+   5.8s  A  median 3.56s  min 3.56  max 3.56  
+   5.8s  E  median 1.18s  min 1.18  max 1.18  =A
+   5.8s  F  median 1.07s  min 1.07  max 1.07  =A =E
+   6.5s  A  median 4.03s  min 4.03  max 4.03  
+   6.5s  E  median 1.38s  min 1.38  max 1.38  =A
+   6.5s  F  median 1.30s  min 1.30  max 1.30  =A =E
+   8.0s  A  median 4.08s  min 4.08  max 4.08  
+   8.0s  E  median 1.50s  min 1.50  max 1.50  ≠A
+   8.0s  F  median 1.36s  min 1.36  max 1.36  ≠A =E
+   9.0s  A  median 4.05s  min 4.05  max 4.05  
+   9.0s  E  median 1.90s  min 1.90  max 1.90  ≠A
+   9.0s  F  median 1.97s  min 1.97  max 1.97  ≠A =E
+   9.4s  A  median 4.45s  min 4.45  max 4.45  
+   9.4s  E  median 2.11s  min 2.11  max 2.11  ≠A
+   9.4s  F  median 2.43s  min 2.43  max 2.43  ≠A =E
+  10.6s  A  median 4.03s  min 4.03  max 4.03  
+  10.6s  E  median 2.14s  min 2.14  max 2.14  =A
+  10.6s  F  median 2.40s  min 2.40  max 2.40  =A =E
+  11.6s  A  median 4.88s  min 4.88  max 4.88  
+  11.6s  E  median 1.72s  min 1.72  max 1.72  ≠A
+  11.6s  F  median 2.41s  min 2.41  max 2.41  ≠A =E
+  17.3s  A  median 5.88s  min 5.88  max 5.88  
+  17.3s  E  median 3.40s  min 3.40  max 3.40  ≠A
+  17.3s  F  median 2.78s  min 2.78  max 2.78  ≠A =E
+  23.6s  A  median 5.85s  min 5.85  max 5.85  
+  23.6s  E  median 4.44s  min 4.44  max 4.44  ≠A
+  23.6s  F  median 4.39s  min 4.39  max 4.39  ≠A =E
+  26.0s  A  median 7.18s  min 7.18  max 7.18  
+  26.0s  E  median 4.97s  min 4.97  max 4.97  ≠A
+  26.0s  F  median 4.38s  min 4.38  max 4.38  ≠A =E
+  30.4s  A  median 9.19s  min 9.19  max 9.19  
+  30.4s  E  median 7.78s  min 7.78  max 7.78  ≠A
+  30.4s  F  median 6.30s  min 6.30  max 6.30  ≠A =E
+  33.3s  A  median 10.55s  min 10.55  max 10.55  
+  33.3s  E  median 8.19s  min 8.19  max 8.19  ≠A
+  33.3s  F  median 6.95s  min 6.95  max 6.95  ≠A =E
+  60.0s  A  median 14.34s  min 14.34  max 14.34  
+  60.0s  E  median 10.94s  min 10.94  max 10.94  ≠A
+  60.0s  F  median 9.36s  min 9.36  max 9.36  ≠A =E

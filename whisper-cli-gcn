@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# whisper-cli-gcn -- Voxtype CLI backend (whisper.mode = "cli") for fast local dictation with
+# whisper.cpp on Vulkan, tuned for old AMD GCN GPUs (works on any Vulkan GPU).
+#
+# Voxtype runs: whisper-cli-gcn --file WAV --output-json --output-file PREFIX --no-prints -m MODEL ...
+# Adds (unless the caller already passes them):
+#   -bs 1                              greedy decoding instead of 5-beam search
+#   -ac min(1500, max(256, s*50+128))  encoder window sized to the clip (s from the WAV header)
+# Settings: ~/.config/voxtype-whisper-gcn/config, KEY=value lines (not sourced):
+#   FAST=1          0 = pass Voxtype's arguments through unchanged
+#   GCN_TUNE=1      0 = exports GGML_VK_GCN_TUNE=0 (untuned kernels)
+#   ICD=            Vulkan driver JSON to force, e.g. /usr/share/vulkan/icd.d/radeon_icd.json on
+#                   laptops with two GPUs (otherwise Vulkan may pick the wrong one)
+#   ARCHIVE_DIR=    keep a copy of every recording + transcript there, plus log.jsonl (off if empty)
+#   LOG_TIMING=1    add elapsed_ms / audio_s / profile / args to log.jsonl (needs ARCHIVE_DIR)
+set -uo pipefail
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+CONF="${WHISPER_GCN_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/voxtype-whisper-gcn/config}"
+MODEL_DIR="${VOXTYPE_MODEL_DIR:-$HOME/.local/share/voxtype/models}"
+
+FAST=1 GCN_TUNE=1 ICD="" ARCHIVE_DIR="" LOG_TIMING=0
+if [[ -r "$CONF" ]]; then
+	while IFS='=' read -r k v; do
+		v="${v%\"}"; v="${v#\"}"; v="${v/#\~/$HOME}"
+		case "$k" in
+			FAST|GCN_TUNE|LOG_TIMING) [[ "$v" =~ ^[01]$ ]] && printf -v "$k" '%s' "$v" ;;
+			ICD|ARCHIVE_DIR) printf -v "$k" '%s' "$v" ;;
+		esac
+	done < <(grep -E '^[A-Z_]+=' "$CONF")
+fi
+
+export LD_LIBRARY_PATH="$ROOT${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+[[ -n "$ICD" ]] && export VK_ICD_FILENAMES="$ICD"
+if [[ "$GCN_TUNE" == 0 ]]; then export GGML_VK_GCN_TUNE=0; else unset GGML_VK_GCN_TUNE; fi
+
+args=() prev="" wav="" out_prefix="" model="" has_bs=0 has_ac=0
+for a in "$@"; do
+	case "$prev" in
+		-m|--model)
+			if [[ "$a" != /* ]]; then
+				for c in "$MODEL_DIR/ggml-$a.bin" "$MODEL_DIR/$a" "$MODEL_DIR/$a.bin"; do [[ -f "$c" ]] && { a="$c"; break; }; done
+			fi
+			model="$a" ;;
+		-f|--file) wav="$a" ;;
+		-of|--output-file) out_prefix="$a" ;;
+	esac
+	case "$a" in -bs|--beam-size) has_bs=1 ;; -ac|--audio-ctx) has_ac=1 ;; esac
+	args+=("$a"); prev="$a"
+done
+
+# Seconds of audio from the RIFF fmt/data chunks (not a fixed 44-byte header). Empty if unreadable.
+wav_seconds() {
+	python3 - "$1" <<'PY' 2>/dev/null
+import struct, sys
+with open(sys.argv[1], 'rb') as f:
+    riff, _, wave = struct.unpack('<4sI4s', f.read(12))
+    if riff != b'RIFF' or wave != b'WAVE': sys.exit(1)
+    rate = align = None
+    while True:
+        h = f.read(8)
+        if len(h) < 8: sys.exit(1)
+        cid, size = struct.unpack('<4sI', h)
+        if cid == b'fmt ':
+            fmt = f.read(size); _, ch, rate, _, align = struct.unpack('<HHIIH', fmt[:14])
+        elif cid == b'data':
+            if not rate or not align: sys.exit(1)
+            print(f"{size / (rate * align):.2f}"); break
+        else:
+            f.seek(size + (size & 1), 1)
+PY
+}
+
+extra=() profile="plain" audio_s=""
+[[ -n "$wav" && -f "$wav" ]] && audio_s="$(wav_seconds "$wav")"
+if [[ "$FAST" == 1 ]]; then
+	profile="fast"
+	(( has_bs )) || extra+=(-bs 1)
+	if (( ! has_ac )) && [[ -n "$audio_s" ]]; then
+		ac=$(awk -v s="$audio_s" 'BEGIN { a = int(s * 50) + 128; if (a < 256) a = 256; if (a > 1500) a = 1500; print a }')
+		extra+=(-ac "$ac")
+	fi
+fi
+[[ "$GCN_TUNE" == 0 ]] && profile+="-untuned"
+
+t0=$(date +%s%N)
+"$ROOT/whisper-cli" "${extra[@]}" "${args[@]}"
+rc=$?
+elapsed_ms=$(( ($(date +%s%N) - t0) / 1000000 ))
+
+# Optional archive, while Voxtype's temporary WAV still exists (it is deleted after we exit).
+if [[ -n "$ARCHIVE_DIR" && -n "$wav" && -f "$wav" ]]; then
+	dest="$ARCHIVE_DIR/$(date +%Y-%m-%d)"; base="voice_memo_$(date +%Y%m%d_%H%M%S)"
+	mkdir -p "$dest"
+	cp -a -- "$wav" "$dest/$base.wav" 2>/dev/null || true
+	[[ -n "$out_prefix" && -f "$out_prefix.json" ]] && cp -a -- "$out_prefix.json" "$dest/$base.json" 2>/dev/null
+	python3 - "$ARCHIVE_DIR" "$dest/$base" "$out_prefix" "${model:-}" "$rc" "$LOG_TIMING" "$elapsed_ms" "${audio_s:-}" "$profile" "${extra[*]} ${args[*]}" <<'PY' 2>/dev/null || true
+import json, os, sys, time
+lib, base, prefix, model, rc, timing, ms, audio_s, profile, argv = sys.argv[1:]
+text = ""
+try:
+    d = json.load(open(prefix + ".json"))
+    text = "".join(s.get("text", "") for s in d.get("transcription") or []).strip()
+except Exception:
+    pass
+if text:
+    open(base + ".txt", "w").write(text + "\n")
+rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "wav": base + ".wav", "model": model,
+       "backend": "whisper-cli-gcn", "exit": int(rc), "text": text}
+if timing == "1":
+    rec.update(elapsed_ms=int(ms), audio_s=float(audio_s) if audio_s else None, profile=profile, args=argv)
+with open(os.path.join(lib, "log.jsonl"), "a") as f:
+    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+PY
+fi
+exit "$rc"

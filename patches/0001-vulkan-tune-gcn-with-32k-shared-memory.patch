@@ -1,0 +1,61 @@
+diff --git i/ggml/src/ggml-vulkan/ggml-vulkan.cpp w/ggml/src/ggml-vulkan/ggml-vulkan.cpp
+index 1720657c..bbc49dda 100644
+--- i/ggml/src/ggml-vulkan/ggml-vulkan.cpp
++++ w/ggml/src/ggml-vulkan/ggml-vulkan.cpp
+@@ -1169,6 +1169,16 @@ void ggml_vk_wait_events(vk_context& ctx, std::vector<vk::Event>&& events) {
+     );
+ }
+ 
++// GCN parts that expose 32 KB of compute shared memory (e.g. GCN 1.0 "Southern Islands" on RADV)
++// miss the RDNA/GCN occupancy tweaks below, which key on 64 KB. Tuned on RADV VERDE (whisper.cpp
++// small.en): scalar FA prefill with one subgroup per workgroup, and a 256-thread float matmul
++// medium tile. GGML_VK_GCN_TUNE=0 disables it.
++static bool ggml_vk_gcn_32k_tune(const vk_device& device) {
++    static const bool disabled = [] { const char * v = getenv("GGML_VK_GCN_TUNE"); return v && strcmp(v, "0") == 0; }();
++    return !disabled && device->vendor_id == VK_VENDOR_ID_AMD && device->architecture == AMD_GCN &&
++           device->properties.limits.maxComputeSharedMemorySize == 32768;
++}
++
+ static vk_fa_tuning_params get_fa_tuning_params_scalar(const vk_device& device, uint32_t hsk, uint32_t hsv, uint32_t n_rows, uint32_t n_kv, ggml_type k_type, ggml_type v_type, bool f32acc) {
+ 
+     vk_fa_tuning_params result{};
+@@ -1221,6 +1231,14 @@ static vk_fa_tuning_params get_fa_tuning_params_scalar(const vk_device& device,
+ 
+     result.shmem_staging = (device->vendor_id == VK_VENDOR_ID_NVIDIA && hsk < 256 && hsv < 256) ? 1 : 0;
+ 
++    // GCN 32 KB: one subgroup per workgroup and 4 rows per block for prefill. Only when row_split == 1,
++    // so every row of a block stays inside the single subgroup.
++    if (ggml_vk_gcn_32k_tune(device) && result.row_split == 1 && n_rows >= 64 &&
++        result.subgroup_size == 64 && !result.disable_subgroups) {
++        result.workgroup_size = result.subgroup_size;
++        result.block_rows = 4;
++    }
++
+     if (!reduce_block_rows && !ggml_vk_flash_attn_scalar_shmem_support(device, result, hsk, hsv, f32acc, k_type, v_type)) {
+         result.block_rows /= 2;
+     }
+@@ -1729,6 +1747,24 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
+         if ((device->architecture == AMD_GCN) && (device->driver_id != vk::DriverId::eAmdProprietary)) {
+             m_warptile_mmq = m_warptile_mmq_int = { 256, 64, 64, 32, 16, 16, 2, 2, 2, 1, 16 };
+             m_warptile_mmqid = m_warptile_mmqid_int = { 256, 64, 64, 32, 16, 16, 2, 2, 2, 1, 16 };
++            if (ggml_vk_gcn_32k_tune(device) && !device->coopmat_support && device->subgroup_size == 64) {
++                // {BLOCK_SIZE, BM, BN, BK, WM, WN, WMITER, TM, TN, TK, WARP}: 4 warps of 32x32, 16 results
++                // per thread (default: 2 warps of 64x32, 32 results). BM/BN unchanged, so m_wg_denoms and
++                // m_align stay valid. Same shape rules the shader assumes are checked here.
++                const std::vector<uint32_t> wt = { 256, 64, 64, 16, 32, 32, 2, 2, 2, 1, 64 };
++                const uint32_t B = wt[0], BM = wt[1], BN = wt[2], WM = wt[4], WN = wt[5], WMI = wt[6], TM = wt[7], TN = wt[8], W = wt[10];
++                const bool ok = B % W == 0 && BM % WM == 0 && BN % WN == 0 && B / W == (BM / WM) * (BN / WN) &&
++                                (WM * WN) % (W * TM * TN * WMI) == 0 && WM % WMI == 0 &&
++                                B <= device->properties.limits.maxComputeWorkGroupInvocations;
++                if (ok) {
++                    m_warptile = wt;
++                    static bool logged = false;
++                    if (!logged) {
++                        logged = true;
++                        GGML_LOG_INFO("ggml_vulkan: GCN 32 KB tuning on (GGML_VK_GCN_TUNE=0 to disable)\n");
++                    }
++                }
++            }
+         } else if (device->vendor_id == VK_VENDOR_ID_AMD && device->coopmat_support && device->driver_id != vk::DriverId::eAmdProprietary) {
+             // This is intentionally using tx_m values, slight performance increase
+             l_warptile = { 256, 128, 128, 16, mm_warp_8, 64, 2, tm_m, tn_m, tk_m, mm_warp_8 };

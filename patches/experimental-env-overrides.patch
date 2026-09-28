@@ -1,0 +1,40 @@
+diff --git i/ggml/src/ggml-vulkan/ggml-vulkan.cpp w/ggml/src/ggml-vulkan/ggml-vulkan.cpp
+index 1720657c..b9fc4042 100644
+--- i/ggml/src/ggml-vulkan/ggml-vulkan.cpp
++++ w/ggml/src/ggml-vulkan/ggml-vulkan.cpp
+@@ -1241,6 +1241,15 @@ static vk_fa_tuning_params get_fa_tuning_params_scalar(const vk_device& device,
+         }
+     }
+ 
++    // whisper-gcn-tune: GCN experiments (prefill only)
++    if (n_rows >= 64) {
++        auto envu = [](const char * k, uint32_t d) { const char * v = getenv(k); return v ? (uint32_t) atoi(v) : d; };
++        result.block_rows     = envu("GGML_VK_FA_BR", result.block_rows);
++        result.block_cols     = envu("GGML_VK_FA_BC", result.block_cols);
++        result.row_split      = envu("GGML_VK_FA_RS", result.row_split);
++        result.workgroup_size = envu("GGML_VK_FA_WG", result.workgroup_size);
++        if (getenv("GGML_VK_FA_LOG")) { static bool once = false; if (!once) { once = true; fprintf(stderr, "FA prefill: hsk=%u n_rows=%u n_kv=%u br=%u bc=%u rs=%u wg=%u sg=%u dsplit=%u\n", hsk, n_rows, n_kv, result.block_rows, result.block_cols, result.row_split, result.workgroup_size, result.subgroup_size, result.d_split); } }
++    }
+     return result;
+ }
+ 
+@@ -2127,6 +2136,19 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
+         return result;
+     };
+ 
++    // whisper-gcn-tune: override float matmul warptiles, e.g. GGML_VK_MM_WT_M=128,64,64,16,64,32,2,4,2,1,64
++    {
++        auto parse = [](const char * k, std::vector<uint32_t> & wt, std::array<uint32_t, 3> & den) {
++            const char * v = getenv(k); if (!v) return;
++            std::vector<uint32_t> r; std::string t(v); size_t p0 = 0;
++            while (p0 <= t.size()) { size_t q = t.find(',', p0); if (q == std::string::npos) q = t.size(); r.push_back((uint32_t) atoi(t.substr(p0, q - p0).c_str())); p0 = q + 1; }
++            if (r.size() != wt.size()) { fprintf(stderr, "%s: need %zu values\n", k, wt.size()); return; }
++            wt = r; den = { r[1], r[2], 1 };
++            fprintf(stderr, "%s applied\n", k);
++        };
++        parse("GGML_VK_MM_WT_M", m_warptile, m_wg_denoms);
++        parse("GGML_VK_MM_WT_S", s_warptile, s_wg_denoms);
++    }
+     std::vector<vk_tile_config> tc_mm = {{s_warptile, s_wg_denoms, s_align}, {m_warptile, m_wg_denoms, m_align}, {l_warptile, l_wg_denoms, l_align}};
+     std::vector<vk_tile_config> tc_mmq = {{s_warptile_mmq, s_mmq_wg_denoms, s_align}, {m_warptile_mmq, m_mmq_wg_denoms, m_align}, {l_warptile_mmq, l_mmq_wg_denoms, l_align}};
+ 

@@ -1,0 +1,30 @@
+3.0 1 def wall=0.951 encode=322.77
+3.0 1 tuned wall=0.883 encode=258.19
+3.0 2 def wall=0.956 encode=327.05
+3.0 2 tuned wall=0.882 encode=259.20
+3.0 text: identical
+5.9 1 def wall=1.330 encode=465.67
+5.9 1 tuned wall=1.244 encode=368.65
+5.9 2 def wall=1.334 encode=464.92
+5.9 2 tuned wall=1.251 encode=375.90
+5.9 text: identical
+9.9 1 def wall=1.511 encode=675.15
+9.9 1 tuned wall=1.366 encode=533.00
+9.9 2 def wall=1.504 encode=672.00
+9.9 2 tuned wall=1.390 encode=543.08
+9.9 text: identical
+15.0 1 def wall=2.358 encode=1282.90
+15.0 1 tuned wall=1.836 encode=767.58
+15.0 2 def wall=2.348 encode=1275.50
+15.0 2 tuned wall=1.855 encode=774.98
+15.0 text: identical
+24.7 1 def wall=3.476 encode=2102.05
+24.7 1 tuned wall=2.677 encode=1272.49
+24.7 2 def wall=3.504 encode=2102.10
+24.7 2 tuned wall=2.672 encode=1257.48
+24.7 text: identical
+45.8 1 def wall=6.699 encode=4581.84
+45.8 1 tuned wall=5.504 encode=2727.75
+45.8 2 def wall=8.292 encode=4570.59
+45.8 2 tuned wall=6.416 encode=2732.77
+45.8 text: identical

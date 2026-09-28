@@ -1,0 +1,4 @@
+This project builds whisper.cpp (https://github.com/ggml-org/whisper.cpp), including ggml, at the
+commit in UPSTREAM, with the patches in patches/. whisper.cpp and ggml are MIT licensed,
+Copyright (c) 2023-2026 The ggml authors. The patches are offered under the same MIT licence.
+Voxtype is a separate project and is not included.
