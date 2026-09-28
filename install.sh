@@ -70,8 +70,10 @@ if [[ -n "$MODEL" ]]; then
 import wave,random,sys
 w=wave.open(sys.argv[1],'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
 w.writeframes(b''.join(random.randint(-200,200).to_bytes(2,'little',signed=True) for _ in range(32000)))" "$WARM"
-	do_ "transcribe 2 s of noise with $(basename "$MODEL")" sh -c "'$DEST/whisper-cli-gcn' -m '$MODEL' -f '$WARM' -l en -np > /dev/null 2>&1 || true"
-	rm -f "$WARM"
+	# Same settings (ICD, tuning) but never archived: the warm-up is not a dictation.
+	WCONF=$(mktemp); grep -v '^ARCHIVE_DIR=' "$CONF_DIR/config" > "$WCONF" 2>/dev/null || true
+	do_ "transcribe 2 s of noise with $(basename "$MODEL")" sh -c "WHISPER_GCN_CONFIG='$WCONF' '$DEST/whisper-cli-gcn' -m '$MODEL' -f '$WARM' -l en -np > /dev/null 2>&1 || true"
+	rm -f "$WARM" "$WCONF"
 else
 	echo "  no Voxtype model found yet; skipped (download one with: voxtype setup --download --model small.en)"
 fi
