@@ -57,7 +57,7 @@ balance). Then install the build tools and this project:
 
 ```bash
 sudo pacman -S --needed git cmake gcc shaderc vulkan-headers spirv-headers vulkan-icd-loader vulkan-radeon python
-git clone https://github.com/<owner>/voxtype-whisper-gcn
+git clone https://github.com/nkeilar/voxtype-whisper-gcn
 cd voxtype-whisper-gcn
 ./install.sh --dry-run        # shows every step, changes nothing
 ./install.sh --set-voxtype    # builds (10–20 min, low priority), installs, switches Voxtype over
