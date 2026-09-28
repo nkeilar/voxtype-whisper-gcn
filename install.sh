@@ -29,6 +29,19 @@ VOX="${XDG_CONFIG_HOME:-$HOME/.config}/voxtype/config.toml"
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
 do_() { local what=$1; shift; if (( DRY )); then echo "  would: $what"; else echo "  $what"; "$@"; fi; }
 
+# Helpers take paths as arguments, so folder names with quotes or spaces are safe.
+install_files() { mkdir -p "$2" && cp -a "$1"/. "$2"/ && install -m755 "$3" "$2/whisper-cli-gcn"; }
+link_bin() { mkdir -p "$(dirname "$2")" && ln -sfn "$1" "$2"; }
+write_config() { # <dir> <icd>
+	mkdir -p "$1" && printf '%s\n' '# voxtype-whisper-gcn settings, KEY=value (explained at the top of whisper-cli-gcn)' \
+		'FAST=1' 'GCN_TUNE=1' "ICD=$2" 'ARCHIVE_DIR=' 'LOG_TIMING=0' > "$1/config"
+}
+warm_up() { WHISPER_GCN_CONFIG="$1" "$2" -m "$3" -f "$4" -l en -np > /dev/null 2>&1 || true; }
+save_previous() { # <state dir> <voxtype config>
+	mkdir -p "$1" && cp -a "$2" "$1/config.toml.before" &&
+		{ echo "mode=$(voxtype config get whisper.mode 2>/dev/null)"; grep -E '^whisper_cli_path *=' "$2" || echo 'whisper_cli_path='; } > "$1/previous"
+}
+
 say "1. Build"
 if (( BUILD )) && [[ ! -x "$DIST/whisper-cli" ]]; then
 	do_ "build whisper.cpp $SHA with patches (10-20 min, low priority)" "$ROOT/scripts/build.sh"
@@ -39,9 +52,9 @@ else
 fi
 
 say "2. Install to $DEST"
-do_ "copy binaries and libraries" sh -c "mkdir -p '$DEST' && cp -a '$DIST'/. '$DEST'/ && install -m755 '$ROOT/whisper-cli-gcn' '$DEST/whisper-cli-gcn'"
+do_ "copy binaries and libraries" install_files "$DIST" "$DEST" "$ROOT/whisper-cli-gcn"
 do_ "link $SHARE/current -> $SHA" ln -sfn "$SHA" "$SHARE/current"
-do_ "link ~/.local/bin/whisper-cli-gcn" sh -c "mkdir -p '$HOME/.local/bin' && ln -sfn '$SHARE/current/whisper-cli-gcn' '$HOME/.local/bin/whisper-cli-gcn'"
+do_ "link ~/.local/bin/whisper-cli-gcn" link_bin "$SHARE/current/whisper-cli-gcn" "$HOME/.local/bin/whisper-cli-gcn"
 
 say "3. Settings ($CONF_DIR/config)"
 if [[ -f "$CONF_DIR/config" ]]; then
@@ -54,9 +67,7 @@ else
 		icd=/usr/share/vulkan/icd.d/radeon_icd.json
 		echo "  two GPUs found; whisper will use the AMD one (ICD=$icd)"
 	fi
-	do_ "write default config" sh -c "mkdir -p '$CONF_DIR' && printf '%s\n' \
-		'# voxtype-whisper-gcn settings, KEY=value (explained at the top of whisper-cli-gcn)' \
-		'FAST=1' 'GCN_TUNE=1' 'ICD=$icd' 'ARCHIVE_DIR=' 'LOG_TIMING=0' > '$CONF_DIR/config'"
+	do_ "write default config" write_config "$CONF_DIR" "$icd"
 fi
 
 say "4. Warm-up (compiles the GPU shaders once, so the first dictation is not slow)"
@@ -72,7 +83,7 @@ w=wave.open(sys.argv[1],'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframer
 w.writeframes(b''.join(random.randint(-200,200).to_bytes(2,'little',signed=True) for _ in range(32000)))" "$WARM"
 	# Same settings (ICD, tuning) but never archived: the warm-up is not a dictation.
 	WCONF=$(mktemp); grep -v '^ARCHIVE_DIR=' "$CONF_DIR/config" > "$WCONF" 2>/dev/null || true
-	do_ "transcribe 2 s of noise with $(basename "$MODEL")" sh -c "WHISPER_GCN_CONFIG='$WCONF' '$DEST/whisper-cli-gcn' -m '$MODEL' -f '$WARM' -l en -np > /dev/null 2>&1 || true"
+	do_ "transcribe 2 s of noise with $(basename "$MODEL")" warm_up "$WCONF" "$DEST/whisper-cli-gcn" "$MODEL" "$WARM"
 	rm -f "$WARM" "$WCONF"
 else
 	echo "  no Voxtype model found yet; skipped (download one with: voxtype setup --download --model small.en)"
@@ -81,16 +92,15 @@ fi
 say "5. Voxtype"
 if (( SET_VOXTYPE )); then
 	[[ -f "$VOX" ]] || { echo "  no $VOX; run voxtype once first" >&2; exit 1; }
-	do_ "save current whisper settings to $STATE/previous" sh -c "mkdir -p '$STATE' && cp -a '$VOX' '$STATE/config.toml.before' && \
-		{ echo \"mode=\$(voxtype config get whisper.mode 2>/dev/null)\"; grep -E '^whisper_cli_path *=' '$VOX' || echo 'whisper_cli_path='; } > '$STATE/previous'"
+	do_ "save current whisper settings to $STATE/previous" save_previous "$STATE" "$VOX"
 	do_ "set whisper.mode = cli and whisper_cli_path = ~/.local/bin/whisper-cli-gcn" python3 - "$VOX" "$HOME/.local/bin/whisper-cli-gcn" <<'PY'
-import re, sys
+import json, re, sys
 p, path = sys.argv[1:]; s = open(p).read()
-line = f'whisper_cli_path = "{path}"'
+line = 'whisper_cli_path = ' + json.dumps(path)  # a valid TOML basic string
 m = re.search(r'(?ms)^\[whisper\]\n(.*?)(?=^\[|\Z)', s)
 if not m: sys.exit("no [whisper] section in " + p)
 body = m.group(1)
-body = re.sub(r'(?m)^whisper_cli_path *=.*$', line, body) if re.search(r'(?m)^whisper_cli_path *=', body) else body.rstrip('\n') + '\n' + line + '\n\n'
+body = re.sub(r'(?m)^whisper_cli_path *=.*$', lambda _: line, body) if re.search(r'(?m)^whisper_cli_path *=', body) else body.rstrip('\n') + '\n' + line + '\n\n'
 body = re.sub(r'(?m)^mode *= *"[a-z]+"', 'mode = "cli"', body) if re.search(r'(?m)^mode *=', body) else body.rstrip('\n') + '\nmode = "cli"\n\n'
 open(p, 'w').write(s[:m.start(1)] + body + s[m.end(1):])
 PY

@@ -22,9 +22,10 @@ m = re.search(r'(?ms)^\[whisper\]\n(.*?)(?=^\[|\Z)', s); body = m.group(1)
 if line.strip() == 'whisper_cli_path=':
     body = re.sub(r'(?m)^whisper_cli_path *=.*\n', '', body)
 else:
-    body = re.sub(r'(?m)^whisper_cli_path *=.*$', line, body)
+    body = re.sub(r'(?m)^whisper_cli_path *=.*$', lambda _: line, body)
 if mode:
-    body = re.sub(r'(?m)^mode *= *"[a-z]+"', f'mode = "{mode}"', body)
+    if re.fullmatch(r'[a-z]+', mode):
+        body = re.sub(r'(?m)^mode *= *"[a-z]+"', f'mode = "{mode}"', body)
 open(p, 'w').write(s[:m.start(1)] + body + s[m.end(1):])
 PY
 	do_ "restart voxtype.service" systemctl --user restart voxtype.service
